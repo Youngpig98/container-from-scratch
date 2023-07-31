@@ -14,4 +14,6 @@
 
 ​	Note that the Go code uses some syscall definitions that are only available when building with GOOS=linux.
 
-​	rootfs package is available at https://cdimage.ubuntu.com/ubuntu-base/releases/14.04/release/ubuntu-base-14.04.1-core-arm64.tar.gz
+​	rootfs package is available at [ubuntu-base-14.04-core-amd64.tar.gz](https://cdimage.ubuntu.com/ubuntu-base/releases/14.04/release/ubuntu-base-14.04-core-amd64.tar.gz)
+
+> note：The host is amd64 or arm64，it must be same with the rootfs.

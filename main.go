@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,7 +9,7 @@ import (
 	"syscall"
 )
 
-//docekr run <cmd> <arguments>
+//docker run <cmd> <arguments>
 //docker child <cmd> <arguments>
 
 func main() {
@@ -71,6 +70,15 @@ func run() {
 }
 
 func child() {
+
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println(r, "doing unmount")
+		}
+		must(syscall.Unmount("proc", 0))
+		//must(syscall.Unmount("thing", 0))
+	}()
+
 	fmt.Printf("child pid: %d\n", os.Getpid())
 	//fmt.Printf("Running %v \n", os.Args[2:])
 
@@ -86,13 +94,19 @@ func child() {
 
 	//set the child process's root file.   use pivot_root
 	//You have to download the os rootfs
-	must(syscall.Chroot("/root/Youngpig1998/containers-from-scratch/ubuntu-fs"))
+	must(syscall.Chroot("/root/docker-tutorial/ubuntu-fs"))
 	must(os.Chdir("/"))
+
+	fmt.Println("chroot finished")
 
 	//when we execute ps command,it will read /proc directory. However, the ubuntu rootfs
 	//dont have /proc, so we have to mount the /proc in host machine.
-	must(syscall.Mount("proc", "ubuntu-fs/proc", "proc", 0, ""))
-	must(syscall.Mount("thing", "mytemp", "tmpfs", 0, ""))
+	source := "proc"
+	target := "/proc"
+	fstype := "proc"
+	flags := uintptr(syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV)
+	must(syscall.Mount(source, target, fstype, flags, ""))
+	//must(syscall.Mount("thing", "/root/docker-tutorial/containers-from-scratch/mytemp", "tmpfs", flags, ""))
 
 	cmd := exec.Command(os.Args[2], os.Args[3:]...)
 	cmd.Stdin = os.Stdin
@@ -102,19 +116,21 @@ func child() {
 	must(cmd.Run())
 
 	//must(syscall.Unmount("ubuntu-fs", 0))
-	must(syscall.Unmount("proc", 0))
-	must(syscall.Unmount("thing", 0))
+
 }
 
 func cg() {
 	cgroups := "/sys/fs/cgroup/"
 	pids := filepath.Join(cgroups, "pids")
 	//  /sys/fs/cgroup/pids/container
-	must(os.Mkdir(filepath.Join(pids, "container"), 0755))
-	must(ioutil.WriteFile(filepath.Join(pids, "container/pids.max"), []byte("10"), 0700))
+	err := os.Mkdir(filepath.Join(pids, "container"), 0755)
+	if err != nil {
+		fmt.Println("container exist,its ok")
+	}
+	must(os.WriteFile(filepath.Join(pids, "container/pids.max"), []byte("10"), 0700))
 	// Removes the new cgroup in place after the container exits
-	must(ioutil.WriteFile(filepath.Join(pids, "container/notify_on_release"), []byte("1"), 0700))
-	must(ioutil.WriteFile(filepath.Join(pids, "container/cgroup.procs"), []byte(strconv.Itoa(os.Getpid())), 0700))
+	must(os.WriteFile(filepath.Join(pids, "container/notify_on_release"), []byte("1"), 0700))
+	must(os.WriteFile(filepath.Join(pids, "container/cgroup.procs"), []byte(strconv.Itoa(os.Getpid())), 0700))
 }
 
 func must(err error) {
