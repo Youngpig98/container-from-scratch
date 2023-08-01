@@ -12,6 +12,13 @@ import (
 //docker run <cmd> <arguments>
 //docker child <cmd> <arguments>
 
+type FileSystem struct {
+	Source string
+	Target string
+	Fstype string
+	Flags  uintptr
+}
+
 func main() {
 
 	if len(os.Args) <= 1 {
@@ -75,8 +82,8 @@ func child() {
 		if r := recover(); r != nil {
 			fmt.Println(r, "doing unmount")
 		}
-		must(syscall.Unmount("proc", 0))
-		//must(syscall.Unmount("thing", 0))
+		must(syscall.Unmount("proc", syscall.MNT_DETACH))
+		must(syscall.Unmount("mytemp", syscall.MNT_DETACH))
 	}()
 
 	fmt.Printf("child pid: %d\n", os.Getpid())
@@ -97,16 +104,29 @@ func child() {
 	must(syscall.Chroot("/root/docker-tutorial/ubuntu-fs"))
 	must(os.Chdir("/"))
 
-	fmt.Println("chroot finished")
+	currentDir, err := os.Getwd()
+	if err != nil {
+		panic(err)
+	} else {
+		fmt.Println("Current working directory:", currentDir)
+	}
 
 	//when we execute ps command,it will read /proc directory. However, the ubuntu rootfs
 	//dont have /proc, so we have to mount the /proc in host machine.
-	source := "proc"
-	target := "/proc"
-	fstype := "proc"
-	flags := uintptr(syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV)
-	must(syscall.Mount(source, target, fstype, flags, ""))
-	//must(syscall.Mount("thing", "/root/docker-tutorial/containers-from-scratch/mytemp", "tmpfs", flags, ""))
+
+	fs := FileSystem{
+		Source: "proc",
+		Target: "proc",
+		Fstype: "proc",
+		Flags:  uintptr(syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NODEV),
+	}
+	must(syscall.Mount(fs.Source, fs.Target, fs.Fstype, fs.Flags, ""))
+
+	fs.Source = "thing"
+	fs.Target = "mytemp"
+	fs.Fstype = "tmpfs"
+	//mytemp是相对路径，绝对路径其实是/root/docker-tutorial/ubuntu-fs/mytemp，所以需要确保该目录下有该目录
+	must(syscall.Mount(fs.Source, fs.Target, fs.Fstype, fs.Flags, ""))
 
 	cmd := exec.Command(os.Args[2], os.Args[3:]...)
 	cmd.Stdin = os.Stdin
